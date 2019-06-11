@@ -4,7 +4,12 @@ import com.google.inject.Inject
 import org.evomaster.client.java.controller.api.dto.database.operations.InsertionDto
 import org.evomaster.core.EMConfig
 import org.evomaster.core.output.*
+import org.evomaster.core.problem.rest.RestCallResult
+import org.evomaster.core.problem.rest.RestIndividual
+import org.evomaster.core.problem.rest.service.RestFitness
+import org.evomaster.core.search.EvaluatedIndividual
 import org.evomaster.core.search.Solution
+import org.evomaster.core.search.service.Archive
 import org.evomaster.core.search.service.SearchTimeController
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -38,16 +43,6 @@ class TestSuiteWriter {
 
         val content = convertToCompilableTestCode(solution, name, controllerName)
         saveToDisk(content, config, name)
-
-        /*if (config.expectationsActive || config.enableBasicAssertions){
-            val numberMatcher = addAdditionalNumberMatcher(name)
-            if (name.hasPackage() && config.outputFormat.isJavaOrKotlin()) {
-                saveToDisk(numberMatcher, config, TestSuiteFileName("${name.getPackage()}.NumberMatcher"))
-            }
-            else{
-                saveToDisk(numberMatcher, config, TestSuiteFileName("NumberMatcher"))
-            }
-        }*/
 
     }
 
@@ -324,109 +319,36 @@ class TestSuiteWriter {
         }
     }
 
-    private fun addAdditionalNumberMatcher(name: TestSuiteFileName): String{
-        val lines = Lines()
-
-        if (name.hasPackage() && config.outputFormat.isJavaOrKotlin()) {
-            addStatement("package ${name.getPackage()}", lines)
+   fun comparisonRun(ff: RestFitness, solution: Solution<*>): List<EvaluatedIndividual<RestIndividual>?> {
+        val rerun = solution.individuals.map{
+            ff.calculateCoverage(it.individual as RestIndividual)
         }
 
-        addImport("org.hamcrest.TypeSafeMatcher", lines)
-        addImport("org.hamcrest.Description", lines)
-        addImport("org.hamcrest.Matcher", lines)
+        // the comparison should identify those actions that result in differences and mark them in some way
+        // So, for each [action] if any of it's [results] are different, mark the entire [action] as different
+        // marked [actions] will receive special treatment during the code generation process
 
-        lines.addEmpty(2)
+        val diffs = rerun.filterIndexed { index, evaluatedIndividual ->
 
-        val format = config.outputFormat
-
-        when {
-            format.isJava() -> {
-                lines.add("class NumberMatcher extends TypeSafeMatcher<Number> {")
-                lines.add("private double value;")
-                lines.add("public NumberMatcher(double value) {")
-                lines.indented {
-                    lines.add("this.value = value;")
-                }
-                lines.add("}")
-            }
-            format.isKotlin() -> {
-                lines.add("class NumberMatcher(")
-                lines.indented {
-                    lines.add("val value: Double")
-                }
-                lines.add("): TypeSafeMatcher<Number>(){")
-            }
+            // compare evaluated inviduals
+            // rerun[index]?.results
+            // solution.individuals[index].results
+            (evaluatedIndividual?.results?.first() as RestCallResult).getBody() != ((solution.individuals[index] as EvaluatedIndividual<*>).results.first() as RestCallResult).getBody()
         }
 
-        lines.indented {
-            // override describeTo
-            when {
-                format.isJava() -> {
-                    lines.add("@Override")
-                    lines.add("public void describeTo(Description description) {")
-                }
-                format.isKotlin() -> lines.add("override fun describeTo(description: Description) {")
-            }
-            lines.add("//The point of the matcher is to allow comparisons between int and double " +
-                    "that have the same value" +
-                    "E.g. that (int) 0 == (double) 0.0")
-            lines.add("}")
-
-            //override matchesSafely
-            when {
-                format.isJava() -> {
-                    lines.add("@Override")
-                    lines.add("protected boolean matchesSafely (Number item) {")
-                    lines.indented { lines.add("return item.doubleValue() == value;")}
-                }
-                format.isKotlin() -> {
-                    lines.add("override fun matchesSafely(item: Number): Boolean {")
-                    lines.indented {  lines.add("return item.toDouble() == value") }
-                }
-            }
-            lines.add("}")
-
-            //static comparison function
-            when {
-                format.isJava() -> {
-                    lines.add("public static Matcher<Number> numberMatches(Number item) {")
-                    lines.indented { lines.add("return new NumberMatcher(item.doubleValue());") }
-                }
-                format.isKotlin() -> {
-                    lines.add("companion object {")
-                    lines.indented {
-                        lines.add("@JvmStatic")
-                        lines.add("fun numberMatches(item: Number): Matcher<Number> { ")
-                        lines.indented { lines.add("return NumberMatcher(item.toDouble())") }
-                    }
-                    lines.add("}")
-                }
-            }
-            lines.add("}")
-
-            //numbers match function
-            when{
-                format.isJava() -> {
-                    lines.add("public static boolean numbersMatch(Number item1, Number item2){")
-                    lines.indented {
-                        lines.add("NumberMatcher n1 = new NumberMatcher(item1.doubleValue());")
-                        lines.add("return n1.matchesSafely(item2);")
-                    }
-                }
-                format.isKotlin() -> {
-                    lines.add("companion object {")
-                    lines.indented {
-                        lines.add("@JvmStatic")
-                        lines.add("fun numbersMatche(item1: Number, item2: Number): Matcher<Number> { ")
-                        lines.add("val n1: NumberMatcher = NumberMatcher(item1.toDouble())")
-                        lines.add("return n1.matchesSafely(item2)")
-                    }
-                }
-            }
-            lines.add("}")
-        }
-        lines.add("}")
-        return lines.toString()
+       rerun.forEachIndexed { index, evaluatedIndividual ->
+           (evaluatedIndividual?.results?.forEachIndexed { i2, actionResult ->
+               if ((actionResult as RestCallResult).getBody() !=
+                       ((solution.individuals[index] as EvaluatedIndividual<*>).results[i2] as RestCallResult).getBody()){
+                   ((solution.individuals[index] as EvaluatedIndividual<*>).results[i2] as RestCallResult)
+                           .setFlaky(actionResult)
+               }
+           })
+           /*if((evaluatedIndividual?.results?.first() as RestCallResult).getBody() !=
+                   ((solution.individuals[index] as EvaluatedIndividual<*>).results.first() as RestCallResult).getBody()) {
+               (solution.individuals[index].results.first() as RestCallResult).setFlaky(evaluatedIndividual?.results?.first() as RestCallResult)
+           }*/
+       }
+        return rerun
     }
-
 }

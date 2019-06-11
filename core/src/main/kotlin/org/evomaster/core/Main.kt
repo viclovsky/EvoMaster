@@ -12,6 +12,7 @@ import org.evomaster.core.AnsiColor.Companion.inYellow
 import org.evomaster.core.logging.LoggingUtil
 import org.evomaster.core.output.service.TestSuiteWriter
 import org.evomaster.core.problem.rest.RestIndividual
+import org.evomaster.core.problem.rest.service.RestFitness
 import org.evomaster.core.problem.rest.service.RestModule
 import org.evomaster.core.problem.web.service.WebModule
 import org.evomaster.core.remote.NoRemoteConnectionException
@@ -277,10 +278,16 @@ class Main {
 
             val writer = injector.getInstance(TestSuiteWriter::class.java)
 
+            val ff = injector.getInstance(RestFitness::class.java)
+            val rerun = writer.comparisonRun(ff, solution)
+
             writer.writeTests(
                     solution,
                     controllerInfoDto.fullName
             )
+
+
+
         }
 
         private fun writeStatistics(injector: Injector, solution: Solution<*>) {

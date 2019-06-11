@@ -548,6 +548,10 @@ class EMConfig {
     @Experimental
     @Cfg("Generate basic assertions. Basic assertions (comparing the returned object to itself) are added to the code. " +
             "NOTE: this should not cause any tests to fail.")
-    var enableBasicAssertions = false
+    var enableBasicAssertions = true
+
+    @Experimental
+    @Cfg("Assess test case flakiness and comment out those assertions that are flaky and will cause failures")
+    var flakinessAssessment = true
 
 }

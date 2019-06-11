@@ -8,6 +8,9 @@ import javax.ws.rs.core.MediaType
 
 class RestCallResult : ActionResult {
 
+    var flaky = false
+    var alternativeRun = this
+
     constructor(stopping: Boolean = false) : super(stopping)
     private constructor(other: ActionResult) : super(other)
 
@@ -106,4 +109,9 @@ class RestCallResult : ActionResult {
 
     fun setTimedout(timedout: Boolean) = addResultValue(TIMEDOUT, timedout.toString())
     fun getTimedout(): Boolean = getResultValue(TIMEDOUT)?.toBoolean() ?: false
+
+    fun setFlaky(alt: RestCallResult){
+        flaky = true
+        alternativeRun = alt
+    }
 }

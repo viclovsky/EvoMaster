@@ -383,6 +383,10 @@ class TestCaseWriter {
                 handleResponseContents(lines, res)
             }
 
+            if(configuration.flakinessAssessment && res.flaky) {
+                lines.append("/* this is bloody flaky, so it is; \n Other value: ${res.alternativeRun.getBody()} */")
+            }
+
             //TODO check on body
         }
     }
@@ -448,6 +452,7 @@ class TestCaseWriter {
                     '{' -> {
                         // JSON contains an object
                         val resContents = Gson().fromJson(res.getBody(), LinkedTreeMap::class.java)
+                        val altContents = Gson().fromJson(res.alternativeRun.getBody(), LinkedTreeMap::class.java)
                         resContents.keys.filter{
                             !(it as String).contains("timestamp")}
                                 .forEach {
