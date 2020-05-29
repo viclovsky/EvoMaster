@@ -14,6 +14,6 @@ public class CIUtils {
      *  as we measure coverage on Travis, then we just skip them if running on CircleCI
      */
     public static void skipIfOnCircleCI(){
-        assumeTrue(!CIUtils.isRunningOnCircleCI());
+        //assumeTrue(!CIUtils.isRunningOnCircleCI());
     }
 }
